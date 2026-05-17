@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { MessageBubble } from "./MessageBubble";
@@ -161,29 +162,22 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
       );
       setTimeout(() => setAppliedDreamFlash(null), 5000);
     });
-    // macOS native notifications for long task completion
+    // macOS native notifications for long task completion.
+    // Permission is requested at mount, so we can fire-and-forget here.
     const offDone = listen<{ task_id: string; goal: string; elapsed_secs: number; iterations: number }>(
       "long-task-done",
-      async (e) => {
+      (e) => {
         const { goal, iterations } = e.payload;
-        const granted = await isPermissionGranted().catch(() => false);
-        const perm = granted ? "granted" : await requestPermission().catch(() => "denied");
-        if (perm === "granted") {
-          const title = goal.length > 50 ? goal.slice(0, 50) + "…" : goal;
-          sendNotification({ title: "✅ 长跑任务完成", body: `${title}（${iterations} 轮）` });
-        }
+        const title = goal.length > 50 ? goal.slice(0, 50) + "…" : goal;
+        sendNotification({ title: "✅ 长跑任务完成", body: `${title}（${iterations} 轮）` });
       },
     );
     const offFailed = listen<{ task_id: string; goal: string; error: string }>(
       "long-task-failed",
-      async (e) => {
+      (e) => {
         const { goal, error } = e.payload;
-        const granted = await isPermissionGranted().catch(() => false);
-        const perm = granted ? "granted" : await requestPermission().catch(() => "denied");
-        if (perm === "granted") {
-          const title = goal.length > 40 ? goal.slice(0, 40) + "…" : goal;
-          sendNotification({ title: "❌ 长跑任务失败", body: `${title}: ${error.slice(0, 80)}` });
-        }
+        const title = goal.length > 40 ? goal.slice(0, 40) + "…" : goal;
+        sendNotification({ title: "❌ 长跑任务失败", body: `${title}: ${error.slice(0, 80)}` });
       },
     );
     return () => {
@@ -243,31 +237,34 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
     await attachFilePaths(paths);
   }
 
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(true);
-  }
+  // Wire up Tauri's native drag-drop + notification permission at mount.
+  // React's onDrop gives File objects without real FS paths in the WebView;
+  // getCurrentWebview().onDragDropEvent() is the only API that delivers them.
+  useEffect(() => {
+    // Request notification permission proactively so it's ready before any
+    // long task finishes (avoids the permission dialog appearing mid-task).
+    isPermissionGranted().then((granted) => {
+      if (!granted) requestPermission().catch(() => {});
+    }).catch(() => {});
 
-  function handleDragLeave(e: React.DragEvent) {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragOver(false);
-    }
-  }
-
-  async function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const paths: string[] = [];
-    for (const item of Array.from(e.dataTransfer.items)) {
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file && (file as unknown as { path?: string }).path) {
-          paths.push((file as unknown as { path: string }).path);
+    let unlisten: (() => void) | undefined;
+    getCurrentWebview().onDragDropEvent((e) => {
+      const ev = e.payload;
+      if (ev.type === "enter" || ev.type === "over") {
+        setDragOver(true);
+      } else if (ev.type === "leave") {
+        setDragOver(false);
+      } else if (ev.type === "drop") {
+        setDragOver(false);
+        if (ev.paths && ev.paths.length > 0) {
+          attachFilePaths(ev.paths);
         }
       }
-    }
-    if (paths.length > 0) await attachFilePaths(paths);
-  }
+    }).then((fn) => { unlisten = fn; }).catch(() => {});
+
+    return () => { unlisten?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function removeAttachment(name: string) {
     setAttachedFiles((prev) => prev.filter((f) => f.name !== name));
@@ -479,9 +476,6 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
         {/* Input */}
         <div
           className={`flex-shrink-0 px-4 py-3 border-t border-[#333] bg-[#1e1e1e] transition-colors ${dragOver ? "bg-[#2a2010] border-[#ff8c00]/50" : ""}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
         >
           {/* Attached file chips */}
           {attachedFiles.length > 0 && (
