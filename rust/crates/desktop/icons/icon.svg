@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background gradient: Claude-like warm amber → deep orange -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9A3C"/>
+      <stop offset="100%" stop-color="#E05A00"/>
+    </linearGradient>
+
+    <!-- Node glow -->
+    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#FFE0B0" stop-opacity="0.7"/>
+    </radialGradient>
+    <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#FFD080" stop-opacity="0.5"/>
+    </radialGradient>
+
+    <!-- Soft shadow filter -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+    <filter id="nodeShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#C04000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded-square background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230" fill="url(#bg)"/>
+
+  <!-- Subtle texture ring -->
+  <circle cx="512" cy="512" r="400" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.08"/>
+  <circle cx="512" cy="512" r="300" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.06"/>
+
+  <!-- ── Connection lines (CEO → 6 sub-agents) ── -->
+  <!-- Rendered first so nodes sit on top -->
+  <!-- Sub-agent positions (r=238 from center, angles 90°/150°/210°/270°/330°/30°) -->
+  <!-- top:    (512, 274) -->
+  <!-- TR:     (718, 393) -->
+  <!-- BR:     (718, 631) -->
+  <!-- bottom: (512, 750) -->
+  <!-- BL:     (306, 631) -->
+  <!-- TL:     (306, 393) -->
+
+  <g stroke="#FFFFFF" stroke-opacity="0.30" stroke-width="14" stroke-linecap="round" filter="url(#shadow)">
+    <line x1="512" y1="512" x2="512" y2="274"/>
+    <line x1="512" y1="512" x2="718" y2="393"/>
+    <line x1="512" y1="512" x2="718" y2="631"/>
+    <line x1="512" y1="512" x2="512" y2="750"/>
+    <line x1="512" y1="512" x2="306" y2="631"/>
+    <line x1="512" y1="512" x2="306" y2="393"/>
+  </g>
+
+  <!-- Faint hexagonal ring connecting sub-agents -->
+  <polygon
+    points="512,274 718,393 718,631 512,750 306,631 306,393"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-opacity="0.12"
+    stroke-width="8"
+    stroke-linejoin="round"
+  />
+
+  <!-- ── Sub-agent nodes (6 outer) ── -->
+  <g filter="url(#nodeShadow)">
+    <!-- top -->
+    <circle cx="512" cy="274" r="58" fill="url(#nodeGlow)" opacity="0.92"/>
+    <!-- TR -->
+    <circle cx="718" cy="393" r="58" fill="url(#nodeGlow)" opacity="0.92"/>
+    <!-- BR -->
+    <circle cx="718" cy="631" r="58" fill="url(#nodeGlow)" opacity="0.92"/>
+    <!-- bottom -->
+    <circle cx="512" cy="750" r="58" fill="url(#nodeGlow)" opacity="0.92"/>
+    <!-- BL -->
+    <circle cx="306" cy="631" r="58" fill="url(#nodeGlow)" opacity="0.92"/>
+    <!-- TL -->
+    <circle cx="306" cy="393" r="58" fill="url(#nodeGlow)" opacity="0.92"/>
+  </g>
+
+  <!-- Sub-agent node rings (accent) -->
+  <g fill="none" stroke="#FF6A00" stroke-width="5" stroke-opacity="0.5">
+    <circle cx="512" cy="274" r="58"/>
+    <circle cx="718" cy="393" r="58"/>
+    <circle cx="718" cy="631" r="58"/>
+    <circle cx="512" cy="750" r="58"/>
+    <circle cx="306" cy="631" r="58"/>
+    <circle cx="306" cy="393" r="58"/>
+  </g>
+
+  <!-- ── CEO center node ── -->
+  <circle cx="512" cy="512" r="110" fill="url(#centerGlow)" filter="url(#nodeShadow)"/>
+  <circle cx="512" cy="512" r="110" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-opacity="0.5"/>
+
+  <!-- Crown symbol inside CEO node: stylized "O" + crown top -->
+  <!-- Inner "O" ring -->
+  <circle cx="512" cy="520" r="44" fill="none" stroke="#E05A00" stroke-width="11" stroke-opacity="0.85"/>
+
+  <!-- Crown: 3 prongs above the O -->
+  <g fill="#E05A00" opacity="0.85">
+    <!-- left prong -->
+    <rect x="468" y="466" width="11" height="34" rx="5"/>
+    <!-- center prong (tallest) -->
+    <rect x="506" y="453" width="11" height="47" rx="5"/>
+    <!-- right prong -->
+    <rect x="545" y="466" width="11" height="34" rx="5"/>
+    <!-- crown base -->
+    <rect x="462" y="492" width="101" height="12" rx="6"/>
+  </g>
+
+  <!-- ── Light flare (top-left corner) ── -->
+  <ellipse cx="280" cy="260" rx="160" ry="100" fill="#FFFFFF" opacity="0.07" transform="rotate(-30 280 260)"/>
+</svg>

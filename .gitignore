@@ -1,0 +1,45 @@
+# Rust build artifacts
+rust/target/
+rust/crates/desktop/gen/
+
+# Node / pnpm
+node_modules/
+rust/crates/desktop/ui/node_modules/
+rust/crates/desktop/ui/dist/
+
+# Tauri bundle outputs (built binaries & installers)
+rust/crates/desktop/icons/AppIcon-*.png
+rust/crates/desktop/icons/mipmap-*/
+rust/crates/desktop/icons/Square*.png
+rust/crates/desktop/icons/StoreLogo.png
+
+# Runtime data (sessions, memory, agent manifests)
+.claw/
+**/.claw/
+.claude/
+**/.claude/
+.clawd-agents/
+**/.clawd-agents/
+.clawd-todos.json
+**/.clawd-todos.json
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Local config & secrets — never commit API keys
+*.local.json
+settings.json
+.claw/settings.local.json
+.env
+.env.*
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Test / temp
+tmp/
+*.tmp

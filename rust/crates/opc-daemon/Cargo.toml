@@ -1,0 +1,23 @@
+[package]
+name = "opc-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "opc-daemon"
+path = "src/main.rs"
+
+[dependencies]
+# Reuse desktop's long-runner + task store. The daemon links against the
+# desktop lib but ignores its Tauri pieces — it constructs a NullSink and
+# runs the same long_runner code path the desktop uses for foreground
+# tasks, only headless.
+opc-desktop = { path = "../desktop" }
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+dirs = "6"
+
+[lints]
+workspace = true

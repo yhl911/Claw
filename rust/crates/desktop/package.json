@@ -1,0 +1,8 @@
+{
+  "name": "opc-desktop",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --dir ui dev",
+    "build": "pnpm --dir ui build"
+  }
+}
