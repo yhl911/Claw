@@ -1,210 +1,251 @@
-# Claw Code
+# Claw — OPC Desktop + CLI
 
 <p align="center">
-  <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a>
-  ·
-  <a href="./USAGE.md">Usage</a>
-  ·
-  <a href="./rust/README.md">Rust workspace</a>
-  ·
-  <a href="./PARITY.md">Parity</a>
-  ·
-  <a href="./ROADMAP.md">Roadmap</a>
-  ·
-  <a href="https://discord.gg/5TUQKqFWd">UltraWorkers Discord</a>
+  <img src="assets/screenshots/icon.png" alt="Claw Icon" width="96" />
 </p>
 
 <p align="center">
-  <a href="https://star-history.com/#ultraworkers/claw-code&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ultraworkers/claw-code&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ultraworkers/claw-code&type=Date" />
-      <img alt="Star history for ultraworkers/claw-code" src="https://api.star-history.com/svg?repos=ultraworkers/claw-code&type=Date" width="600" />
-    </picture>
-  </a>
+  <strong>AI-native macOS desktop for one-person companies.</strong><br/>
+  A CEO Agent that orchestrates 7 specialized sub-agents, built on Claude.
 </p>
 
 <p align="center">
-  <img src="assets/claw-hero.jpeg" alt="Claw Code" width="300" />
+  <img src="https://img.shields.io/badge/platform-macOS-blue?logo=apple" />
+  <img src="https://img.shields.io/badge/built_with-Tauri_v2-orange?logo=rust" />
+  <img src="https://img.shields.io/badge/AI-Claude_3.x_%2F_4.x-blueviolet?logo=anthropic" />
+  <img src="https://img.shields.io/badge/license-MIT-green" />
 </p>
 
-Claw Code is the public Rust implementation of the `claw` CLI agent harness.
-The canonical implementation lives in [`rust/`](./rust), and the current source of truth for this repository is **ultraworkers/claw-code**.
+---
 
-> [!IMPORTANT]
-> Start with [`USAGE.md`](./USAGE.md) for build, auth, CLI, session, and parity-harness workflows. Make `claw doctor` your first health check after building, use [`rust/README.md`](./rust/README.md) for crate-level details, read [`PARITY.md`](./PARITY.md) for the current Rust-port checkpoint, and see [`docs/container.md`](./docs/container.md) for the container-first workflow.
->
-> **ACP / Zed status:** `claw-code` does not ship an ACP/Zed daemon entrypoint yet. Run `claw acp` (or `claw --acp`) for the current status instead of guessing from source layout; `claw acp serve` is currently a discoverability alias only, and real ACP support remains tracked separately in `ROADMAP.md`.
+## Overview
 
-## Current repository shape
+**Claw** combines a production-grade AI CLI (`claw`) with a native macOS desktop app — **OPC Desktop** — that puts a full one-person-company command center in a single window.
 
-- **`rust/`** — canonical Rust workspace and the `claw` CLI binary
-- **`USAGE.md`** — task-oriented usage guide for the current product surface
-- **`PARITY.md`** — Rust-port parity status and migration notes
-- **`ROADMAP.md`** — active roadmap and cleanup backlog
-- **`PHILOSOPHY.md`** — project intent and system-design framing
-- **`src/` + `tests/`** — companion Python/reference workspace and audit helpers; not the primary runtime surface
+You talk to a CEO Agent. It delegates to 7 domain-specific sub-agents. All agents share a workspace, a session, and a common tool surface.
 
-## Quick start
+<!-- SCREENSHOT: full 3-column layout (SessionSidebar | ChatPanel | OpcAgentPanel) -->
+<!-- Add screenshots/main.png after taking a screenshot of the running app -->
+<!--
+![OPC Desktop main view](assets/screenshots/main.png)
+-->
 
-> [!NOTE]
-> [!WARNING]
-> **`cargo install claw-code` installs the wrong thing.** The `claw-code` crate on crates.io is a deprecated stub that places `claw-code-deprecated.exe` — not `claw`. Running it only prints `"claw-code has been renamed to agent-code"`. **Do not use `cargo install claw-code`.** Either build from source (this repo) or install the upstream binary:
-> ```bash
-> cargo install agent-code   # upstream binary — installs 'agent.exe' (Windows) / 'agent' (Unix), NOT 'agent-code'
-> ```
-> This repo (`ultraworkers/claw-code`) is **build-from-source only** — follow the steps below.
+---
 
-```bash
-# 1. Clone and build
-git clone https://github.com/ultraworkers/claw-code
-cd claw-code/rust
-cargo build --workspace
+## Features
 
-# 2. Set your API key (Anthropic API key — not a Claude subscription)
-export ANTHROPIC_API_KEY="sk-ant-..."
+### 🏢 OPC Mode — One-Person Company CEO Agent
 
-# 3. Verify everything is wired correctly
-./target/debug/claw doctor
+The core innovation: a **CEO Agent** that understands your business context and routes work to specialized sub-agents.
 
-# 4. Run a prompt
-./target/debug/claw prompt "say hello"
+| Sub-agent | Specialty |
+|-----------|-----------|
+| `opc-product` | Product strategy, roadmap, user research |
+| `opc-engineering` | Architecture, code review, technical decisions |
+| `opc-finance` | P&L, budgeting, financial analysis |
+| `opc-marketing` | Copy, campaigns, positioning |
+| `opc-sales` | Pipeline, outreach, CRM strategy |
+| `opc-ops` | Ops, hiring, process, legal-adjacent |
+| `opc-legal` | Contracts, compliance, risk |
+
+The CEO routes tasks automatically — just describe what you need. Sub-agent panels appear live as delegation happens.
+
+### 🧠 Intelligent Context Management
+
+- **Context fill bar** — real-time visualization of how full the context window is
+- **Auto-compaction** — when context nears capacity, important content is summarized and the window is cleared automatically; no lost history
+- **Decision Anchors** — key decisions are extracted and re-injected as compact anchor blocks, so the CEO never forgets critical choices even after compaction
+- **Dream pass** — background memory consolidation distills sessions into durable insights
+
+### 🔄 Loop Detection
+
+A FNV-1a hash ring buffer detects when the model is stuck in a repetitive pattern. When a loop is detected, the current turn is gracefully interrupted before wasting tokens.
+
+### 🔐 Secure Key Storage
+
+API keys are stored in the **macOS Keychain** (not in files, not in env vars). Keys are read at runtime and never written to disk in plaintext.
+
+### 📡 Multi-Provider Support
+
+| Prefix / env | Provider |
+|---|---|
+| *(default)* | Anthropic (Claude) |
+| `openai/` model prefix | OpenAI-compatible |
+| `grok-*` | xAI / Grok |
+| `qwen-*` | Alibaba DashScope |
+| `OPENAI_BASE_URL` | Any OpenAI-compatible endpoint |
+
+### 💬 Native Chat UX
+
+- Real-time SSE streaming with token-by-token rendering
+- Markdown + code block rendering
+- Session sidebar with history
+- Cancel in-flight requests
+- Confirm dialog before clearing sessions
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    OPC Desktop (Tauri v2)                │
+│  ┌──────────────┬────────────────┬─────────────────────┐ │
+│  │ SessionSide  │   ChatPanel    │   OpcAgentPanel     │ │
+│  │ bar          │                │                     │ │
+│  │  • Sessions  │  CEO Agent     │  • Active agents    │ │
+│  │  • History   │  conversation  │  • Sub-agent status │ │
+│  │              │                │  • Delegation log   │ │
+│  └──────────────┴────────────────┴─────────────────────┘ │
+│                          │                               │
+│              Tauri IPC (Rust backend)                    │
+│                          │                               │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │              WorkerMsg Channel                    │   │
+│  │   ConversationRuntime + Session + ToolExecutor    │   │
+│  └───────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+                           │
+              ┌────────────┴─────────────┐
+              │      Claw Crates         │
+              │  api/ runtime/ tools/    │
+              │  commands/ plugins/      │
+              └──────────────────────────┘
 ```
 
-> [!NOTE]
-> **Windows (PowerShell):** the binary is `claw.exe`, not `claw`. Use `.\target\debug\claw.exe` or run `cargo run -- prompt "say hello"` to skip the path lookup.
+### Key crates
 
-### Windows setup
+| Crate | Role |
+|---|---|
+| `api` | HTTP client, SSE streaming, provider abstraction |
+| `runtime` | `ConversationRuntime`, session persistence, MCP, hooks |
+| `tools` | All tool implementations + `GlobalToolRegistry` |
+| `commands` | Slash commands, parse/validate, renderers |
+| `rusty-claude-cli` | CLI entry point, REPL loop |
+| `desktop` | Tauri backend: state, workers, dream, loop detection |
 
-**PowerShell is a supported Windows path.** Use whichever shell works for you. The common onboarding issues on Windows are:
+---
 
-1. **Install Rust first** — download from <https://rustup.rs/> and run the installer. Close and reopen your terminal when it finishes.
-2. **Verify Rust is on PATH:**
-   ```powershell
-   cargo --version
-   ```
-   If this fails, reopen your terminal or run the PATH setup from the Rust installer output, then retry.
-3. **Clone and build** (works in PowerShell, Git Bash, or WSL):
-   ```powershell
-   git clone https://github.com/ultraworkers/claw-code
-   cd claw-code/rust
-   cargo build --workspace
-   ```
-4. **Run** (PowerShell — note `.exe` and backslash):
-   ```powershell
-   $env:ANTHROPIC_API_KEY = "sk-ant-..."
-   .\target\debug\claw.exe prompt "say hello"
-   ```
+## Getting Started
 
-**Git Bash / WSL** are optional alternatives, not requirements. If you prefer bash-style paths (`/c/Users/you/...` instead of `C:\Users\you\...`), Git Bash (ships with Git for Windows) works well. In Git Bash, the `MINGW64` prompt is expected and normal — not a broken install.
+### Prerequisites
 
-## Post-build: locate the binary and verify
+- macOS 13+ (Apple Silicon or Intel)
+- [Rust](https://rustup.rs/) + `cargo`
+- [Node.js](https://nodejs.org/) 18+ and [pnpm](https://pnpm.io/)
+- [Tauri CLI](https://tauri.app/start/prerequisites/): `cargo install tauri-cli`
+- An **Anthropic API key** (`sk-ant-...`)
 
-After running `cargo build --workspace`, the `claw` binary is built but **not** automatically installed to your system. Here's where to find it and how to verify the build succeeded.
-
-### Binary location
-
-After `cargo build --workspace` in `claw-code/rust/`:
-
-**Debug build (default, faster compile):**
-- **macOS/Linux:** `rust/target/debug/claw`
-- **Windows:** `rust/target/debug/claw.exe`
-
-**Release build (optimized, slower compile):**
-- **macOS/Linux:** `rust/target/release/claw`
-- **Windows:** `rust/target/release/claw.exe`
-
-If you ran `cargo build` without `--release`, the binary is in the `debug/` folder.
-
-### Verify the build succeeded
-
-Test the binary directly using its path:
+### Development (hot reload)
 
 ```bash
-# macOS/Linux (debug build)
-./rust/target/debug/claw --help
-./rust/target/debug/claw doctor
+# 1. Install frontend deps
+cd rust/crates/desktop/ui
+pnpm install
 
-# Windows PowerShell (debug build)
-.\rust\target\debug\claw.exe --help
-.\rust\target\debug\claw.exe doctor
+# 2. Start desktop app in dev mode (from repo root)
+cd rust
+cargo tauri dev --config crates/desktop/tauri.conf.json
 ```
 
-If these commands succeed, the build is working. `claw doctor` is your first health check — it validates your API key, model access, and tool configuration.
+The app will open with hot reload on frontend changes.
 
-### Optional: Add to PATH
-
-If you want to run `claw` from any directory without the full path, choose one of these approaches:
-
-**Option 1: Symlink (macOS/Linux)**
-```bash
-ln -s $(pwd)/rust/target/debug/claw /usr/local/bin/claw
-```
-Then reload your shell and test:
-```bash
-claw --help
-```
-
-**Option 2: Use `cargo install` (all platforms)**
-
-Build and install to Cargo's default location (`~/.cargo/bin/`, which is usually on PATH):
-```bash
-# From the claw-code/rust/ directory
-cargo install --path . --force
-
-# Then from anywhere
-claw --help
-```
-
-**Option 3: Update shell profile (bash/zsh)**
-
-Add this line to `~/.bashrc` or `~/.zshrc`:
-```bash
-export PATH="$(pwd)/rust/target/debug:$PATH"
-```
-
-Reload your shell:
-```bash
-source ~/.bashrc  # or source ~/.zshrc
-claw --help
-```
-
-### Troubleshooting
-
-- **"command not found: claw"** — The binary is in `rust/target/debug/claw`, but it's not on your PATH. Use the full path `./rust/target/debug/claw` or symlink/install as above.
-- **"permission denied"** — On macOS/Linux, you may need `chmod +x rust/target/debug/claw` if the executable bit isn't set (rare).
-- **Debug vs. release** — If the build is slow, you're in debug mode (default). Add `--release` to `cargo build` for faster runtime, but the build itself will take 5–10 minutes.
-
-> [!NOTE]
-> **Auth:** claw requires an **API key** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) — Claude subscription login is not a supported auth path.
-
-Run the workspace test suite after verifying the binary works:
+### Build DMG installer
 
 ```bash
 cd rust
-cargo test --workspace
+cargo tauri build --config crates/desktop/tauri.conf.json
+# Output: rust/crates/desktop/target/release/bundle/dmg/OPC Desktop_0.1.0_aarch64.dmg
 ```
 
-## Documentation map
+### CLI only
 
-- [`USAGE.md`](./USAGE.md) — quick commands, auth, sessions, config, parity harness
-- [`rust/README.md`](./rust/README.md) — crate map, CLI surface, features, workspace layout
-- [`PARITY.md`](./PARITY.md) — parity status for the Rust port
-- [`rust/MOCK_PARITY_HARNESS.md`](./rust/MOCK_PARITY_HARNESS.md) — deterministic mock-service harness details
-- [`ROADMAP.md`](./ROADMAP.md) — active roadmap and open cleanup work
-- [`PHILOSOPHY.md`](./PHILOSOPHY.md) — why the project exists and how it is operated
+```bash
+cd rust
+cargo build --workspace
+export ANTHROPIC_API_KEY="sk-ant-..."
+./target/debug/claw doctor   # health check
+./target/debug/claw          # interactive REPL
+./target/debug/claw --opc    # CEO Agent mode (CLI)
+```
 
-## Ecosystem
+---
 
-Claw Code is built in the open alongside the broader UltraWorkers toolchain:
+## Configuration
 
-- [clawhip](https://github.com/Yeachan-Heo/clawhip)
-- [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
-- [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode)
-- [oh-my-codex](https://github.com/Yeachan-Heo/oh-my-codex)
-- [UltraWorkers Discord](https://discord.gg/5TUQKqFWd)
+| File | Purpose |
+|---|---|
+| `.claw.json` | Project-level defaults (model, permissions) |
+| `.claw/settings.local.json` | Machine-local overrides (gitignored) |
+| macOS Keychain | API key storage (set via Settings modal in desktop app) |
 
-## Ownership / affiliation disclaimer
+### Environment variables
 
-- This repository does **not** claim ownership of the original Claude Code source material.
-- This repository is **not affiliated with, endorsed by, or maintained by Anthropic**.
+```bash
+ANTHROPIC_API_KEY=sk-ant-...       # Anthropic auth
+ANTHROPIC_BASE_URL=...             # Optional proxy
+OPENAI_API_KEY=sk-...              # OpenAI-compat providers
+OPENAI_BASE_URL=https://...        # OpenAI-compat endpoint
+```
+
+---
+
+## CLI Quick Reference
+
+```bash
+claw                    # Interactive REPL
+claw --opc              # CEO Agent mode
+claw prompt "..."       # One-shot prompt
+claw doctor             # Health check
+claw session list       # List sessions
+```
+
+**Slash commands (in REPL or desktop):**
+
+```
+/clear              Clear session (with confirm dialog)
+/compact            Manual compaction
+/model <name>       Switch model
+/opc-agents         List active OPC sub-agents
+/help               Show all commands
+```
+
+---
+
+## Roadmap
+
+- [ ] iOS / iPad companion app
+- [ ] Team mode: shared sub-agent sessions
+- [ ] Plugin marketplace for custom sub-agents
+- [ ] Voice input for CEO Agent
+- [ ] Export conversations to Notion / Confluence
+- [ ] Local model support (Ollama)
+
+---
+
+## Contributing
+
+PRs welcome. Run `scripts/fmt.sh` before committing. CI enforces `cargo clippy -D warnings`.
+
+```bash
+# Test
+cd rust && cargo test --workspace
+
+# Lint
+cargo clippy --workspace --all-targets -- -D warnings
+
+# Format
+../scripts/fmt.sh
+```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+<p align="center">
+  Built with ☕ and Claude.
+</p>
