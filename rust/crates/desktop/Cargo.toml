@@ -16,6 +16,7 @@ path = "src/lib.rs"
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }

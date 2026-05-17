@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { MessageBubble } from "./MessageBubble";
 import { SettingsModal } from "./SettingsModal";
 import { DreamReviewModal } from "./DreamReviewModal";
 import { PlusMenu } from "./PlusMenu";
 import { ContextHealthBadge } from "./ContextHealthBadge";
 import { useConversation } from "../hooks/useConversation";
+
+interface AttachedFile {
+  name: string;
+  content: string;
+}
 
 interface DreamPendingPayload {
   proposal: { files: Record<string, string>; rationale: string };
@@ -47,11 +55,12 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   /// shows a confirmation; progress is tracked in the sidebar's LongTaskPanel.
   const [longMode, setLongMode] = useState(false);
   const [longTaskFlash, setLongTaskFlash] = useState<string | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function startLongTask(text: string) {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       const taskId = await invoke<string>("start_long_task", { goal: text });
       setLongTaskFlash(
         `🚀 长跑任务已启动 (${taskId})。可关闭 app — 重启后能继续看到进度。`,
@@ -68,7 +77,6 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
     setExporting(true);
     try {
       // 1. Ask backend to render the session as markdown.
-      const { invoke } = await import("@tauri-apps/api/core");
       const exported = await invoke<{ filename: string; content: string }>(
         "export_session",
       );
@@ -153,16 +161,42 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
       );
       setTimeout(() => setAppliedDreamFlash(null), 5000);
     });
+    // macOS native notifications for long task completion
+    const offDone = listen<{ task_id: string; goal: string; elapsed_secs: number; iterations: number }>(
+      "long-task-done",
+      async (e) => {
+        const { goal, iterations } = e.payload;
+        const granted = await isPermissionGranted().catch(() => false);
+        const perm = granted ? "granted" : await requestPermission().catch(() => "denied");
+        if (perm === "granted") {
+          const title = goal.length > 50 ? goal.slice(0, 50) + "…" : goal;
+          sendNotification({ title: "✅ 长跑任务完成", body: `${title}（${iterations} 轮）` });
+        }
+      },
+    );
+    const offFailed = listen<{ task_id: string; goal: string; error: string }>(
+      "long-task-failed",
+      async (e) => {
+        const { goal, error } = e.payload;
+        const granted = await isPermissionGranted().catch(() => false);
+        const perm = granted ? "granted" : await requestPermission().catch(() => "denied");
+        if (perm === "granted") {
+          const title = goal.length > 40 ? goal.slice(0, 40) + "…" : goal;
+          sendNotification({ title: "❌ 长跑任务失败", body: `${title}: ${error.slice(0, 80)}` });
+        }
+      },
+    );
     return () => {
       offPending.then((f) => f());
       offApplied.then((f) => f());
       offCompact.then((f) => f());
+      offDone.then((f) => f());
+      offFailed.then((f) => f());
     };
   }, []);
 
   async function handleCompact() {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       const report = await invoke<{ dropped: number; kept: number } | null>(
         "compact_session_now",
       );
@@ -177,6 +211,66 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
       setAppliedDreamFlash(`压缩失败：${String(e)}`);
       setTimeout(() => setAppliedDreamFlash(null), 6000);
     }
+  }
+
+  async function attachFilePaths(paths: string[]) {
+    const results: AttachedFile[] = [];
+    for (const path of paths) {
+      try {
+        const content = await invoke<string>("read_attachment", { path });
+        const name = path.split("/").pop() ?? path;
+        results.push({ name, content });
+      } catch (e) {
+        setAppliedDreamFlash(`无法读取文件：${String(e)}`);
+        setTimeout(() => setAppliedDreamFlash(null), 4000);
+      }
+    }
+    if (results.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...results]);
+    }
+  }
+
+  async function handleAttachClick() {
+    const selected = await openDialog({
+      multiple: true,
+      filters: [
+        { name: "文本 / 代码", extensions: ["txt", "md", "ts", "tsx", "js", "jsx", "py", "rs", "go", "java", "c", "cpp", "h", "json", "yaml", "yml", "toml", "csv", "html", "css", "sh", "sql"] },
+        { name: "所有文件", extensions: ["*"] },
+      ],
+    });
+    if (!selected) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    await attachFilePaths(paths);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const paths: string[] = [];
+    for (const item of Array.from(e.dataTransfer.items)) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file && (file as unknown as { path?: string }).path) {
+          paths.push((file as unknown as { path: string }).path);
+        }
+      }
+    }
+    if (paths.length > 0) await attachFilePaths(paths);
+  }
+
+  function removeAttachment(name: string) {
+    setAttachedFiles((prev) => prev.filter((f) => f.name !== name));
   }
 
   // Esc to cancel a running turn
@@ -195,7 +289,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text && attachedFiles.length === 0) return;
 
     // Local slash-command interception (desktop-side only — never sent to API)
     if (text === "/clear") {
@@ -228,11 +322,24 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
       return;
     }
 
+    // Prepend attached file contents as fenced code blocks
+    let fullText = text;
+    if (attachedFiles.length > 0) {
+      const blocks = attachedFiles
+        .map((f) => {
+          const ext = f.name.split(".").pop() ?? "";
+          return `【附件：${f.name}】\n\`\`\`${ext}\n${f.content}\n\`\`\``;
+        })
+        .join("\n\n");
+      fullText = blocks + (text ? "\n\n" + text : "");
+      setAttachedFiles([]);
+    }
+
     setInput("");
     if (longMode) {
-      startLongTask(text);
+      startLongTask(fullText);
     } else {
-      sendMessage(text);
+      sendMessage(fullText);
     }
   }
 
@@ -370,13 +477,56 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 px-4 py-3 border-t border-[#333] bg-[#1e1e1e]">
+        <div
+          className={`flex-shrink-0 px-4 py-3 border-t border-[#333] bg-[#1e1e1e] transition-colors ${dragOver ? "bg-[#2a2010] border-[#ff8c00]/50" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Attached file chips */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {attachedFiles.map((f) => (
+                <span
+                  key={f.name}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#2d2d2d] border border-[#ff8c00]/40 rounded text-xs text-[#ff8c00]"
+                >
+                  <span>📎</span>
+                  <span className="max-w-[180px] truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(f.name)}
+                    className="ml-0.5 text-[#888] hover:text-red-400 transition-colors"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {dragOver && (
+            <div className="mb-2 text-center text-xs text-[#ff8c00] animate-pulse">
+              放开以附加文件
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="flex gap-2 items-end">
             <PlusMenu
               onInsert={(text) => {
                 setInput((prev) => (prev ? prev + "\n" + text : text));
               }}
             />
+            {/* Attach file button */}
+            <button
+              type="button"
+              onClick={handleAttachClick}
+              disabled={thinking}
+              title="附加文件（或直接拖文件到输入区）"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-[#666] hover:text-[#ff8c00] hover:bg-[#2d2d2d] transition-colors disabled:opacity-30"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -384,9 +534,11 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
               placeholder={
                 thinking
                   ? "Agent 正在工作… 点击右侧 ■ 中止"
-                  : longMode
-                    ? "🚀 长跑模式 — 提交后在后台跑（可关 app），从左侧 panel 看进度"
-                    : "输入你的需求… (Enter 发送，Shift+Enter 换行；/ 看 slash 命令)"
+                  : dragOver
+                    ? "放开以附加文件…"
+                    : longMode
+                      ? "🚀 长跑模式 — 提交后在后台跑（可关 app），从左侧 panel 看进度"
+                      : "输入你的需求… (Enter 发送，Shift+Enter 换行；/ 看 slash 命令)"
               }
               rows={1}
               disabled={thinking}
@@ -413,7 +565,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
             ) : (
               <button
                 type="submit"
-                disabled={!input.trim()}
+                disabled={!input.trim() && attachedFiles.length === 0}
                 className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#ff8c00] text-white flex items-center justify-center disabled:opacity-40 hover:bg-[#e07800] transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -179,6 +179,15 @@ pub fn run(
                         serde_json::json!(elapsed.as_secs_f64()),
                     ),
             );
+            sink.emit(
+                "long-task-done",
+                serde_json::json!({
+                    "task_id": task_id,
+                    "goal": spec.goal,
+                    "elapsed_secs": elapsed.as_secs_f64(),
+                    "iterations": summary.iterations,
+                }),
+            );
             Ok(())
         }
         Ok(Err(e)) => {
@@ -201,6 +210,14 @@ pub fn run(
                         .with_task(task_id.to_string())
                         .with_extra("status", serde_json::json!("failed"))
                         .with_extra("error", serde_json::json!(msg.clone())),
+                );
+                sink.emit(
+                    "long-task-failed",
+                    serde_json::json!({
+                        "task_id": task_id,
+                        "goal": spec.goal,
+                        "error": msg,
+                    }),
                 );
                 Err(msg)
             }
