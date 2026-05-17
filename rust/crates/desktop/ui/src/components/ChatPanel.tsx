@@ -16,6 +16,14 @@ interface AttachedFile {
   content: string;
 }
 
+interface PastedImage {
+  /** Preview data URL for display only (includes data: prefix). */
+  preview: string;
+  /** Raw base64 bytes — no data: prefix, sent to backend. */
+  data: string;
+  media_type: string;
+}
+
 interface DreamPendingPayload {
   proposal: { files: Record<string, string>; rationale: string };
   previous: Record<string, string>;
@@ -57,6 +65,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   const [longMode, setLongMode] = useState(false);
   const [longTaskFlash, setLongTaskFlash] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -270,6 +279,33 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
     setAttachedFiles((prev) => prev.filter((f) => f.name !== name));
   }
 
+  function removePastedImage(idx: number) {
+    setPastedImages((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter((item) => item.type.startsWith("image/"));
+    if (imageItems.length === 0) return; // let normal text paste proceed
+
+    e.preventDefault();
+    for (const item of imageItems) {
+      const file = item.getAsFile();
+      if (!file) continue;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        if (!dataUrl) return;
+        // data:image/png;base64,<data>  →  strip the prefix
+        const commaIdx = dataUrl.indexOf(",");
+        const raw = dataUrl.slice(commaIdx + 1);
+        const media_type = item.type; // e.g. "image/png"
+        setPastedImages((prev) => [...prev, { preview: dataUrl, data: raw, media_type }]);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
   // Esc to cancel a running turn
   useEffect(() => {
     if (!thinking) return;
@@ -286,7 +322,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text && attachedFiles.length === 0) return;
+    if (!text && attachedFiles.length === 0 && pastedImages.length === 0) return;
 
     // Local slash-command interception (desktop-side only — never sent to API)
     if (text === "/clear") {
@@ -333,10 +369,13 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
     }
 
     setInput("");
+    const images = pastedImages.map(({ data, media_type }) => ({ data, media_type }));
+    if (pastedImages.length > 0) setPastedImages([]);
+
     if (longMode) {
       startLongTask(fullText);
     } else {
-      sendMessage(fullText);
+      sendMessage(fullText, images.length > 0 ? images : undefined);
     }
   }
 
@@ -477,6 +516,27 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
         <div
           className={`flex-shrink-0 px-4 py-3 border-t border-[#333] bg-[#1e1e1e] transition-colors ${dragOver ? "bg-[#2a2010] border-[#ff8c00]/50" : ""}`}
         >
+          {/* Pasted image thumbnails */}
+          {pastedImages.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {pastedImages.map((img, idx) => (
+                <div key={idx} className="relative group">
+                  <img
+                    src={img.preview}
+                    alt={`图片 ${idx + 1}`}
+                    className="h-16 w-auto max-w-[120px] object-cover rounded border border-[#ff8c00]/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePastedImage(idx)}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Attached file chips */}
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -525,6 +585,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder={
                 thinking
                   ? "Agent 正在工作… 点击右侧 ■ 中止"
@@ -532,7 +593,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
                     ? "放开以附加文件…"
                     : longMode
                       ? "🚀 长跑模式 — 提交后在后台跑（可关 app），从左侧 panel 看进度"
-                      : "输入你的需求… (Enter 发送，Shift+Enter 换行；/ 看 slash 命令)"
+                      : "输入你的需求… (Enter 发送，Shift+Enter 换行；截图可直接 Ctrl+V 粘贴)"
               }
               rows={1}
               disabled={thinking}
@@ -559,7 +620,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
             ) : (
               <button
                 type="submit"
-                disabled={!input.trim() && attachedFiles.length === 0}
+                disabled={!input.trim() && attachedFiles.length === 0 && pastedImages.length === 0}
                 className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#ff8c00] text-white flex items-center justify-center disabled:opacity-40 hover:bg-[#e07800] transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -350,9 +350,20 @@ pub struct OpcAgentInfo {
     pub created_at_secs: u64,
 }
 
+/// Inline image payload forwarded with a user message.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ImagePayload {
+    /// Base64-encoded image bytes (no data-URL prefix).
+    pub data: String,
+    /// MIME type: `"image/png"`, `"image/jpeg"`, `"image/gif"`, `"image/webp"`.
+    pub media_type: String,
+}
+
 pub enum WorkerMsg {
     SendMessage {
         text: String,
+        /// Optional inline images (vision). Empty vec = text-only turn.
+        images: Vec<ImagePayload>,
         responder: std::sync::mpsc::SyncSender<Result<TurnResult, String>>,
     },
     /// Wipe the *current* session: delete its jsonl + create a fresh one

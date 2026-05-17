@@ -129,16 +129,20 @@ export function useConversation(sessionEpoch: number = 0) {
     };
   }, []);
 
-  async function sendMessage(text: string) {
-    if (!text.trim() || thinking) return;
+  async function sendMessage(text: string, images?: { data: string; media_type: string }[]) {
+    if (!text.trim() && (!images || images.length === 0) || thinking) return;
 
     const userId = String(counterRef.current++);
-    setMessages((prev) => [...prev, { id: userId, role: "user", text }]);
+    const displayText = text.trim() || (images && images.length > 0 ? `[${images.length} 张图片]` : "");
+    setMessages((prev) => [...prev, { id: userId, role: "user", text: displayText }]);
     setThinking(true);
     setError(null);
 
     try {
-      const result = await invoke<TurnResult>("send_message", { message: text });
+      const result = await invoke<TurnResult>("send_message", {
+        message: text,
+        images: images && images.length > 0 ? images : undefined,
+      });
       const liveId = liveIdRef.current;
       // Finalize the streamed bubble: stamp tokens, mark done.
       // If for some reason the live bubble doesn't exist (no turn-start received),

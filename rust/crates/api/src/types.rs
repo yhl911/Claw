@@ -104,6 +104,21 @@ pub enum InputContentBlock {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         is_error: bool,
     },
+    Image {
+        source: ImageSource,
+    },
+}
+
+/// Source descriptor for an image content block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageSource {
+    /// Always `"base64"` for inline images.
+    #[serde(rename = "type")]
+    pub source_type: String,
+    /// MIME type: `"image/png"`, `"image/jpeg"`, `"image/gif"`, `"image/webp"`.
+    pub media_type: String,
+    /// Base64-encoded image bytes (no data-URL prefix).
+    pub data: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -352,14 +352,27 @@ where
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn run_turn(
+    /// Run a turn where the user message is specified as an explicit list of
+    /// content blocks. Enables multimodal input (text + inline images).
+    ///
+    /// This is the canonical implementation; [`run_turn`] is a thin wrapper.
+    pub fn run_turn_with_content(
         &mut self,
-        user_input: impl Into<String>,
+        blocks: Vec<crate::session::ContentBlock>,
         mut prompter: Option<&mut dyn PermissionPrompter>,
     ) -> Result<TurnSummary, RuntimeError> {
-        let user_input = user_input.into();
+        // Extract display text for telemetry (first Text block, or "<image>").
+        let display = blocks
+            .iter()
+            .find_map(|b| {
+                if let crate::session::ContentBlock::Text { text } = b {
+                    Some(text.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "<image>".to_string());
 
-        // ROADMAP #38: Session-health canary - probe if context was compacted
         if self.session.compaction.is_some() {
             if let Err(error) = self.run_session_health_probe() {
                 return Err(RuntimeError::new(format!(
@@ -370,9 +383,9 @@ where
             }
         }
 
-        self.record_turn_started(&user_input);
+        self.record_turn_started(&display);
         self.session
-            .push_user_text(user_input)
+            .push_user_content(blocks)
             .map_err(|error| RuntimeError::new(error.to_string()))?;
 
         let mut assistant_messages = Vec::new();
@@ -605,6 +618,19 @@ where
         self.record_turn_completed(&summary);
 
         Ok(summary)
+    }
+
+    /// Convenience wrapper: run a turn from a plain-text user message.
+    /// Delegates to [`run_turn_with_content`] with a single `Text` block.
+    pub fn run_turn(
+        &mut self,
+        user_input: impl Into<String>,
+        prompter: Option<&mut dyn PermissionPrompter>,
+    ) -> Result<TurnSummary, RuntimeError> {
+        self.run_turn_with_content(
+            vec![ContentBlock::Text { text: user_input.into() }],
+            prompter,
+        )
     }
 
     #[must_use]

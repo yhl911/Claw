@@ -41,6 +41,13 @@ pub enum ContentBlock {
         output: String,
         is_error: bool,
     },
+    /// Inline base64 image for vision-capable models.
+    Image {
+        /// MIME type: `"image/png"`, `"image/jpeg"`, etc.
+        media_type: String,
+        /// Raw base64-encoded bytes (no `data:…` prefix).
+        data: String,
+    },
 }
 
 /// One conversation message with optional token-usage metadata.
@@ -244,6 +251,16 @@ impl Session {
 
     pub fn push_user_text(&mut self, text: impl Into<String>) -> Result<(), SessionError> {
         self.push_message(ConversationMessage::user_text(text))
+    }
+
+    /// Push a user message built from an explicit list of content blocks.
+    /// Useful for multimodal turns (text + images).
+    pub fn push_user_content(&mut self, blocks: Vec<ContentBlock>) -> Result<(), SessionError> {
+        self.push_message(ConversationMessage {
+            role: crate::session::MessageRole::User,
+            blocks,
+            usage: None,
+        })
     }
 
     pub fn record_compaction(&mut self, summary: impl Into<String>, removed_message_count: usize) {
@@ -767,6 +784,16 @@ impl ContentBlock {
                 object.insert("output".to_string(), JsonValue::String(output.clone()));
                 object.insert("is_error".to_string(), JsonValue::Bool(*is_error));
             }
+            Self::Image { media_type, data } => {
+                object.insert("type".to_string(), JsonValue::String("image".to_string()));
+                object.insert(
+                    "media_type".to_string(),
+                    JsonValue::String(media_type.clone()),
+                );
+                // Store only the first 64 chars as a preview marker in JSONL;
+                // full data is kept in memory during the session.
+                object.insert("data".to_string(), JsonValue::String(data.clone()));
+            }
         }
         JsonValue::Object(object)
     }
@@ -796,6 +823,10 @@ impl ContentBlock {
                     .get("is_error")
                     .and_then(JsonValue::as_bool)
                     .ok_or_else(|| SessionError::Format("missing is_error".to_string()))?,
+            }),
+            "image" => Ok(Self::Image {
+                media_type: required_string(object, "media_type")?,
+                data: required_string(object, "data")?,
             }),
             other => Err(SessionError::Format(format!(
                 "unsupported block type: {other}"

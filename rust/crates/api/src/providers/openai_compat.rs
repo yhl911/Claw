@@ -984,7 +984,7 @@ pub fn translate_message(message: &InputMessage, model: &str) -> Vec<Value> {
                             "arguments": input.to_string(),
                         }
                     })),
-                    InputContentBlock::ToolResult { .. } => {}
+                    InputContentBlock::ToolResult { .. } | InputContentBlock::Image { .. } => {}
                 }
             }
             if text.is_empty() && tool_calls.is_empty() {
@@ -1034,6 +1034,17 @@ pub fn translate_message(message: &InputMessage, model: &str) -> Vec<Value> {
                     Some(msg)
                 }
                 InputContentBlock::ToolUse { .. } => None,
+                // OpenAI-compat providers: translate image blocks to the
+                // vision content-part format.
+                InputContentBlock::Image { source } => Some(json!({
+                    "role": "user",
+                    "content": [{
+                        "type": "image_url",
+                        "image_url": {
+                            "url": format!("data:{};base64,{}", source.media_type, source.data),
+                        }
+                    }]
+                })),
             })
             .collect(),
     }

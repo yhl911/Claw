@@ -43,7 +43,7 @@ pub mod skills;
 pub mod vault;
 
 use config::{apply_config_to_env, load_config, save_config, DesktopConfig};
-use state::{AppState, DesktopState, OpcAgentInfo, TurnResult, WorkerMsg};
+use state::{AppState, DesktopState, ImagePayload, OpcAgentInfo, TurnResult, WorkerMsg};
 use tauri::{Emitter, State};
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -52,11 +52,17 @@ use tauri::{Emitter, State};
 async fn send_message(
     state: State<'_, AppState>,
     message: String,
+    #[allow(clippy::default_trait_access)]
+    images: Option<Vec<ImagePayload>>,
 ) -> Result<TurnResult, String> {
     let (resp_tx, resp_rx) = std::sync::mpsc::sync_channel(1);
     state
         .tx
-        .send(WorkerMsg::SendMessage { text: message, responder: resp_tx })
+        .send(WorkerMsg::SendMessage {
+            text: message,
+            images: images.unwrap_or_default(),
+            responder: resp_tx,
+        })
         .map_err(|_| "Worker is not running. Please check your API key settings and restart.".to_string())?;
     // Use spawn_blocking so the sync `recv()` does not block a Tauri/Tokio
     // executor thread. Without this, while `run_turn` is in flight (often
@@ -1131,9 +1137,9 @@ fn worker_loop(
 
     while let Ok(msg) = rx.recv() {
         match msg {
-            WorkerMsg::SendMessage { text, responder } => {
+            WorkerMsg::SendMessage { text, images, responder } => {
                 let preview: String = text.chars().take(80).collect();
-                eprintln!("[worker] SendMessage received: {preview:?}");
+                eprintln!("[worker] SendMessage received: {preview:?} ({} images)", images.len());
                 // Enforce budget caps before we spend money. The check is
                 // a single linear pass over the (tiny) token log so the
                 // cost of checking is negligible compared to the API call
@@ -1167,7 +1173,22 @@ fn worker_loop(
                             let mut approver = permission::OpcApprover;
                             let prompter: Option<&mut dyn runtime::PermissionPrompter> =
                                 Some(&mut approver);
-                            state_ref.runtime.run_turn(&text, prompter)
+                            if images.is_empty() {
+                                state_ref.runtime.run_turn(&text, prompter)
+                            } else {
+                                // Multimodal turn: images first, then text.
+                                let mut blocks: Vec<runtime::ContentBlock> = images
+                                    .iter()
+                                    .map(|img| runtime::ContentBlock::Image {
+                                        media_type: img.media_type.clone(),
+                                        data: img.data.clone(),
+                                    })
+                                    .collect();
+                                if !text.is_empty() {
+                                    blocks.push(runtime::ContentBlock::Text { text: text.clone() });
+                                }
+                                state_ref.runtime.run_turn_with_content(blocks, prompter)
+                            }
                         }),
                     );
 

@@ -206,6 +206,9 @@ fn render_transcript(messages: &[ConversationMessage]) -> String {
                     let trimmed = truncate(output, 600);
                     out.push_str(&format!("[{kind}] {trimmed}\n"));
                 }
+                ContentBlock::Image { media_type, .. } => {
+                    out.push_str(&format!("[image: {media_type}]\n"));
+                }
             }
         }
         out.push('\n');

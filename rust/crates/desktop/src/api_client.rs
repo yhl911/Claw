@@ -1,6 +1,7 @@
 use api::{
-    ContentBlockDelta, InputContentBlock, InputMessage, MessageRequest, OutputContentBlock,
-    ProviderClient, StreamEvent, ToolChoice, ToolDefinition, ToolResultContentBlock,
+    ContentBlockDelta, ImageSource, InputContentBlock, InputMessage, MessageRequest,
+    OutputContentBlock, ProviderClient, StreamEvent, ToolChoice, ToolDefinition,
+    ToolResultContentBlock,
 };
 use runtime::{
     ApiClient, ApiRequest, AssistantEvent, ContentBlock, ConversationMessage, MessageRole,
@@ -389,6 +390,15 @@ fn convert_messages_with_reasoning(
                         }],
                         is_error: *is_error,
                     },
+                    ContentBlock::Image { media_type, data } => {
+                        InputContentBlock::Image {
+                            source: ImageSource {
+                                source_type: "base64".to_string(),
+                                media_type: media_type.clone(),
+                                data: data.clone(),
+                            },
+                        }
+                    }
                 })
                 .collect();
 
