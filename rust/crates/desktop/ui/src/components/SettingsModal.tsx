@@ -36,6 +36,7 @@ interface Config {
   budget_monthly_usd: number;
   permission_mode: string;
   auto_compact_threshold: number;
+  brave_api_key: string;
 }
 
 interface Props {
@@ -59,6 +60,7 @@ export function SettingsModal({ onClose, onSaved }: Props) {
     budget_monthly_usd: 0,
     permission_mode: "danger-full-access",
     auto_compact_threshold: 0,
+    brave_api_key: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -367,6 +369,23 @@ export function SettingsModal({ onClose, onSaved }: Props) {
             </p>
           </div>
 
+
+          {/* Brave Search API key */}
+          <div className="border-t border-[#333] pt-3">
+            <label className="block text-xs font-medium text-[#888] mb-1.5">
+              Brave API Key <span className="text-[#555]">(可选)</span>
+            </label>
+            <input
+              type="password"
+              value={config.brave_api_key}
+              onChange={(e) => setConfig({ ...config, brave_api_key: e.target.value })}
+              placeholder="BSA..."
+              className="w-full bg-[#1a1a1a] text-[#e5e5e5] text-sm rounded-lg px-3 py-2.5 border border-[#444] focus:outline-none focus:border-[#ff8c00] placeholder-[#555] transition-colors font-mono"
+            />
+            <p className="text-xs text-[#666] mt-1">
+              免费获取：brave.com/search/api （2000次/月）。配置后 CEO 可使用 web_search 工具搜索实时信息。
+            </p>
+          </div>
 
           {error && (
             <div className="px-3 py-2 bg-red-900/30 border border-red-800 rounded-lg text-xs text-red-300">

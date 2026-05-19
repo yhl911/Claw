@@ -9,6 +9,7 @@ import { SettingsModal } from "./SettingsModal";
 import { DreamReviewModal } from "./DreamReviewModal";
 import { PlusMenu } from "./PlusMenu";
 import { ContextHealthBadge } from "./ContextHealthBadge";
+import { CompanyEditor } from "./CompanyEditor";
 import { useConversation } from "../hooks/useConversation";
 
 interface AttachedFile {
@@ -53,6 +54,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   } = useConversation(sessionEpoch);
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [showCompanyEditor, setShowCompanyEditor] = useState(false);
   const [showDream, setShowDream] = useState(false);
   const [pendingDream, setPendingDream] = useState<DreamPendingPayload | null>(null);
   const [appliedDreamFlash, setAppliedDreamFlash] = useState<string | null>(null);
@@ -444,6 +446,13 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
               清空会话
             </button>
             <button
+              onClick={() => setShowCompanyEditor(true)}
+              className="text-xs text-[#666] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
+              title="公司档案 — 配置 CEO 的公司背景知识"
+            >
+              <span>🏢</span> 档案
+            </button>
+            <button
               onClick={() => setShowSettings(true)}
               className="text-xs text-[#666] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
               title="Settings"
@@ -645,6 +654,10 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
         />
       )}
 
+
+      {showCompanyEditor && (
+        <CompanyEditor onClose={() => setShowCompanyEditor(false)} />
+      )}
 
       {showDream && <DreamReviewModal onClose={() => setShowDream(false)} />}
 

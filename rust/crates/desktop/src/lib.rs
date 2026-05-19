@@ -21,6 +21,7 @@
 mod anchors;
 mod api_client;
 mod compaction;
+mod company;
 mod context_window;
 mod daemon_client;
 mod dream;
@@ -30,6 +31,7 @@ mod permission;
 mod state;
 mod token_stats;
 mod tool_executor;
+mod web_search;
 
 // These modules are re-exposed as `pub mod` so the `opc-daemon` binary
 // crate (which depends on `opc_desktop_lib`) can call into them without
@@ -882,6 +884,16 @@ fn read_attachment(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("read: {e}"))
 }
 
+#[tauri::command]
+fn get_company_context() -> Result<String, String> {
+    Ok(company::read_company_context().unwrap_or_default())
+}
+
+#[tauri::command]
+fn save_company_context(text: String) -> Result<(), String> {
+    company::write_company_context(&text)
+}
+
 /// Return the list of available slash commands (drawn from the runtime's
 /// command registry). For Phase 3 the desktop only displays them — actual
 /// slash command parsing happens in the chat input pipeline.
@@ -1554,6 +1566,8 @@ pub fn run() {
             compact_session_now,
             list_anchors,
             remove_anchor,
+            get_company_context,
+            save_company_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

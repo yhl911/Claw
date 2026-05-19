@@ -87,6 +87,9 @@ pub struct DesktopConfig {
     /// users typically tolerate that for a few turns before noticing.
     #[serde(default)]
     pub auto_compact_threshold: f32,
+    /// Brave Search API key for web_search tool. Get free key at brave.com/search/api/
+    #[serde(default)]
+    pub brave_api_key: String,
 }
 
 fn default_dream_mode() -> String {
@@ -128,6 +131,7 @@ impl Default for DesktopConfig {
             budget_monthly_usd: 0.0,
             permission_mode: default_permission_mode(),
             auto_compact_threshold: 0.0,
+            brave_api_key: String::new(),
         }
     }
 }
@@ -193,6 +197,7 @@ pub fn load_config() -> DesktopConfig {
             budget_monthly_usd: 0.0,
             permission_mode: default_permission_mode(),
             auto_compact_threshold: 0.0,
+            brave_api_key: String::new(),
         }
     };
     // Transparent re-hydration from the platform keyring. If a previous

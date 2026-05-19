@@ -304,7 +304,8 @@ fn build_task_runtime(
 
     // Long-running tasks reuse the task_id as their "session id" for
     // anchor scoping — anchors pinned during the task stay with the task.
-    let tool_executor = DesktopToolExecutor::new(desktop_mcp, task_id.to_string());
+    let tool_executor =
+        DesktopToolExecutor::new(desktop_mcp, task_id.to_string(), cfg.brave_api_key.clone());
     let policy_mode = crate::config::parse_permission_mode(&cfg.permission_mode);
     let policy = PermissionPolicy::new(policy_mode);
 

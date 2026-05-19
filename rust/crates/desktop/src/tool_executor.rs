@@ -15,14 +15,17 @@ pub struct DesktopToolExecutor {
     /// Active session id — used by desktop-injected tools (notably
     /// `pin_decision`) to scope their side effects to the right session.
     session_id: String,
+    /// Brave Search API key for the web_search tool.
+    brave_api_key: String,
 }
 
 impl DesktopToolExecutor {
-    pub fn new(mcp: Option<DesktopMcp>, session_id: String) -> Self {
+    pub fn new(mcp: Option<DesktopMcp>, session_id: String, brave_api_key: String) -> Self {
         Self {
             mcp,
             loop_detector: LoopDetector::new(),
             session_id,
+            brave_api_key,
         }
     }
 
@@ -83,6 +86,29 @@ impl DesktopToolExecutor {
         )))
     }
 
+    /// Handle the `web_search` desktop tool. Returns `None` if the tool
+    /// name doesn't match, so the caller can fall through to other paths.
+    fn try_web_search(&self, tool_name: &str, input: &str) -> Option<Result<String, ToolError>> {
+        if tool_name != "web_search" {
+            return None;
+        }
+        let parsed: serde_json::Value = serde_json::from_str(input).ok()?;
+        let query = parsed
+            .get("query")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if query.is_empty() {
+            return Some(Err(ToolError::new(
+                "web_search: `query` is required".to_string(),
+            )));
+        }
+        Some(
+            crate::web_search::search(&query, &self.brave_api_key).map_err(ToolError::new),
+        )
+    }
+
     /// Try MCP first if the tool name is in our registered map. Returns
     /// `None` to signal "fall through to built-in dispatch".
     fn try_mcp(&self, tool_name: &str, input: &str) -> Option<Result<String, ToolError>> {
@@ -109,6 +135,9 @@ impl ToolExecutor for DesktopToolExecutor {
             return Err(ToolError::new(loop_msg));
         }
         if let Some(result) = self.try_pin_decision(tool_name, input) {
+            return result;
+        }
+        if let Some(result) = self.try_web_search(tool_name, input) {
             return result;
         }
         if let Some(result) = self.try_mcp(tool_name, input) {
@@ -178,6 +207,10 @@ impl ToolExecutor for DesktopToolExecutor {
                 continue;
             }
             if let Some(r) = self.try_pin_decision(name, input) {
+                results[i] = Some(r);
+                continue;
+            }
+            if let Some(r) = self.try_web_search(name, input) {
                 results[i] = Some(r);
                 continue;
             }
@@ -256,7 +289,7 @@ mod tests {
     /// "parallel" and anything over 2.5s as "sequential" (with margin).
     #[test]
     fn execute_batch_runs_in_parallel() {
-        let mut exec = DesktopToolExecutor::new(None, "test-session".to_string());
+        let mut exec = DesktopToolExecutor::new(None, "test-session".to_string(), String::new());
         // Use distinct command suffixes so the LoopDetector (3 identical
         // calls in a row trips an error) doesn't fire on this batch.
         let calls = vec![
@@ -291,7 +324,7 @@ mod tests {
     #[test]
     fn execute_batch_fast_path_for_single_call() {
         // Single-call path skips thread::scope but still works.
-        let mut exec = DesktopToolExecutor::new(None, "test-session".to_string());
+        let mut exec = DesktopToolExecutor::new(None, "test-session".to_string(), String::new());
         let calls = vec![(
             "bash".to_string(),
             serde_json::json!({"command": "echo hello"}).to_string(),
@@ -305,7 +338,7 @@ mod tests {
     #[test]
     fn execute_batch_preserves_order_with_mixed_durations() {
         // Even though calls run concurrently, results must come back in input order.
-        let mut exec = DesktopToolExecutor::new(None, "test-session".to_string());
+        let mut exec = DesktopToolExecutor::new(None, "test-session".to_string(), String::new());
         let calls = vec![
             (
                 "bash".to_string(),

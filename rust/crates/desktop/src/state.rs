@@ -92,6 +92,28 @@ impl DesktopState {
             }),
         });
 
+        // Web search tool — uses Brave Search API configured in settings.
+        tool_specs.push(api::ToolDefinition {
+            name: "web_search".to_string(),
+            description: Some(
+                "Search the web for current information: competitor research, market data, \
+                 news, documentation, pricing, or any topic requiring up-to-date knowledge. \
+                 Returns top search results with titles, descriptions, and URLs. \
+                 Use this proactively when the user asks about markets, competitors, or current events."
+                    .to_string(),
+            ),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query. Be specific for better results."
+                    }
+                },
+                "required": ["query"]
+            }),
+        });
+
         // Initialize user-configured MCP servers (best-effort). On success
         // we extend `tool_specs` with the discovered tools and route their
         // calls through the executor.
@@ -118,7 +140,8 @@ impl DesktopState {
             cancel_flag,
             sink,
         )?;
-        let tool_executor = DesktopToolExecutor::new(desktop_mcp, session_id.clone());
+        let tool_executor =
+            DesktopToolExecutor::new(desktop_mcp, session_id.clone(), config.brave_api_key.clone());
         // Desktop app is local + user-owned; default to full access so
         // bash / WebSearch / etc. just work. Users who want a brake can
         // dial it down in Settings (config.permission_mode).
@@ -133,6 +156,13 @@ impl DesktopState {
 
         if opc_mode {
             system_prompt.push(OPC_CEO_SYSTEM_PROMPT.to_string());
+        }
+
+        // Inject company knowledge base (always, not only in opc_mode)
+        if let Some(company_ctx) = crate::company::read_company_context() {
+            system_prompt.push(format!(
+                "## 公司知识库\n\n以下是用户配置的公司背景信息，在整个对话中始终有效：\n\n{company_ctx}"
+            ));
         }
 
         // Inject long-term memory from .claw/memory/ (dreaming consolidation).
