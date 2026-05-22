@@ -10,6 +10,7 @@ import { DreamReviewModal } from "./DreamReviewModal";
 import { PlusMenu } from "./PlusMenu";
 import { ContextHealthBadge } from "./ContextHealthBadge";
 import { CompanyEditor } from "./CompanyEditor";
+import { DecisionLog } from "./DecisionLog";
 import { useConversation } from "../hooks/useConversation";
 
 interface AttachedFile {
@@ -55,6 +56,7 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showCompanyEditor, setShowCompanyEditor] = useState(false);
+  const [showDecisionLog, setShowDecisionLog] = useState(false);
   const [showDream, setShowDream] = useState(false);
   const [pendingDream, setPendingDream] = useState<DreamPendingPayload | null>(null);
   const [appliedDreamFlash, setAppliedDreamFlash] = useState<string | null>(null);
@@ -485,6 +487,13 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
               <span>🏢</span> 档案
             </button>
             <button
+              onClick={() => setShowDecisionLog(true)}
+              className="text-xs text-[#666] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
+              title="决策日志 — 查看 CEO 固定的重要判断"
+            >
+              <span>📌</span> 决策
+            </button>
+            <button
               onClick={() => setShowSettings(true)}
               className="text-xs text-[#666] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
               title="Settings"
@@ -720,6 +729,10 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
 
       {showCompanyEditor && (
         <CompanyEditor onClose={() => setShowCompanyEditor(false)} />
+      )}
+
+      {showDecisionLog && (
+        <DecisionLog onClose={() => setShowDecisionLog(false)} />
       )}
 
       {showDream && <DreamReviewModal onClose={() => setShowDream(false)} />}
