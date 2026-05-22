@@ -578,13 +578,32 @@ pub fn mvp_tool_specs() -> Vec<ToolSpec> {
         },
         ToolSpec {
             name: "Agent",
-            description: "Launch a specialized agent task and persist its handoff metadata.",
+            description: "Spawn a specialist agent to handle a sub-task autonomously. \
+                The agent runs in an isolated context, uses its own tools, and returns \
+                a structured result. Use `role` to define a purpose-built expert for the \
+                specific task (preferred). Use `subagent_type` only for standard presets \
+                (opc-product / opc-engineering / opc-marketing / opc-sales / opc-finance / \
+                opc-ops / opc-legal). Multiple agents can be launched in parallel by \
+                calling this tool multiple times in a single reply.",
             input_schema: json!({
                 "type": "object",
                 "properties": {
-                    "description": { "type": "string" },
-                    "prompt": { "type": "string" },
-                    "subagent_type": { "type": "string" },
+                    "description": {
+                        "type": "string",
+                        "description": "One-line summary of what this agent will do (shown in UI)."
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Full task brief for the agent. Include all context it needs — it cannot see the parent conversation."
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Free-form role definition for a custom agent. Describe the agent's identity, expertise, and output style. Takes precedence over subagent_type for prompt generation. Example: '专注于 B2B SaaS 竞品定价分析的市场研究员，输出结构化 Markdown 对比报告'."
+                    },
+                    "subagent_type": {
+                        "type": "string",
+                        "description": "Preset role shortcut. Use only when the task maps cleanly to a standard function. Ignored when `role` is provided."
+                    },
                     "name": { "type": "string" },
                     "model": { "type": "string" }
                 },
@@ -2318,6 +2337,11 @@ struct AgentInput {
     description: String,
     prompt: String,
     subagent_type: Option<String>,
+    /// Free-form role description for a custom/dynamic agent. When provided,
+    /// defines the agent's identity and expertise instead of (or in addition to)
+    /// a preset `subagent_type`. Takes precedence for system-prompt generation.
+    /// Example: "专注于 B2B SaaS 竞品定价分析的市场研究员"
+    role: Option<String>,
     name: Option<String>,
     model: Option<String>,
 }
@@ -3635,7 +3659,8 @@ where
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| slugify_agent_name(&input.description));
     let created_at = iso8601_now();
-    let system_prompt = build_agent_system_prompt(&normalized_subagent_type)?;
+    let system_prompt =
+        build_agent_system_prompt(&normalized_subagent_type, input.role.as_deref())?;
     let allowed_tools = allowed_tools_for_subagent(&normalized_subagent_type);
 
     let output_contents = format!(
@@ -3795,7 +3820,10 @@ const OPC_SUBAGENT_PREAMBLE: &str = "\
 \
 ## 你的专业角色描述\n\n";
 
-fn build_agent_system_prompt(subagent_type: &str) -> Result<Vec<String>, String> {
+fn build_agent_system_prompt(
+    subagent_type: &str,
+    role: Option<&str>,
+) -> Result<Vec<String>, String> {
     let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
     let mut prompt = load_system_prompt(
         cwd,
@@ -3805,6 +3833,13 @@ fn build_agent_system_prompt(subagent_type: &str) -> Result<Vec<String>, String>
     )
     .map_err(|error| error.to_string())?;
 
+    // `role` takes precedence — CEO defined a custom specialist.
+    if let Some(role_desc) = role.filter(|r| !r.trim().is_empty()) {
+        prompt.push(build_dynamic_role_prompt(role_desc));
+        return Ok(prompt);
+    }
+
+    // Fall through to preset roles.
     let role_body: Option<&str> = match subagent_type {
         "opc-product" => Some(OPC_PRODUCT_PROMPT),
         "opc-engineering" => Some(OPC_ENGINEERING_PROMPT),
@@ -3819,11 +3854,32 @@ fn build_agent_system_prompt(subagent_type: &str) -> Result<Vec<String>, String>
     if let Some(body) = role_body {
         prompt.push(format!("{OPC_SUBAGENT_PREAMBLE}{body}"));
     } else {
-        prompt.push(format!(
-            "You are a background sub-agent of type `{subagent_type}`. Work only on the delegated task, use only the tools available to you, do not ask the user questions, and finish with a concise result."
-        ));
+        // Unknown type — treat the type string itself as the role name and
+        // build a structured prompt from it so the agent has clear identity.
+        prompt.push(build_dynamic_role_prompt(subagent_type));
     }
     Ok(prompt)
+}
+
+/// Build a rich system prompt from a free-form role description.
+/// Used for dynamically created agents (where CEO defines the specialist inline).
+fn build_dynamic_role_prompt(role: &str) -> String {
+    format!(
+        "## 你的角色\n\
+         \n\
+         {role}\n\
+         \n\
+         ## 工作准则\n\
+         \n\
+         你是 CEO Agent 为本次任务临时委派的专业执行者。\
+         请严格聚焦于分配的任务范围，充分发挥你的专业判断。\n\
+         \n\
+         - **直接执行**：不要向用户提问，根据已有信息做出最优判断并完成任务\n\
+         - **交付物优先**：输出可直接使用的结果——代码、文档、分析报告、方案——而非讨论过程\n\
+         - **Markdown 格式**：使用清晰的标题、列表、表格组织输出，方便 CEO 直接引用\n\
+         - **专家立场**：给出明确结论和建议，不要罗列选项让上级选择\n\
+         - **任务完成即收尾**：不要以\u{201c}需要进一步细化吗\u{201d}结尾"
+    )
 }
 
 fn resolve_agent_model(model: Option<&str>) -> String {
