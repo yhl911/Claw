@@ -32,6 +32,7 @@ mod state;
 mod token_stats;
 mod tool_executor;
 mod web_search;
+mod weekly_os;
 
 // These modules are re-exposed as `pub mod` so the `opc-daemon` binary
 // crate (which depends on `opc_desktop_lib`) can call into them without
@@ -894,6 +895,19 @@ fn save_company_context(text: String) -> Result<(), String> {
     company::write_company_context(&text)
 }
 
+/// Returns `true` when the weekly kickoff banner should be shown
+/// (first launch of a new calendar week).
+#[tauri::command]
+fn check_weekly_kickoff() -> bool {
+    weekly_os::should_show_kickoff()
+}
+
+/// Mark the weekly kickoff as handled (started or skipped).
+#[tauri::command]
+fn dismiss_weekly_kickoff() -> Result<(), String> {
+    weekly_os::mark_kickoff_done()
+}
+
 /// Return the list of available slash commands (drawn from the runtime's
 /// command registry). For Phase 3 the desktop only displays them — actual
 /// slash command parsing happens in the chat input pipeline.
@@ -1568,6 +1582,8 @@ pub fn run() {
             remove_anchor,
             get_company_context,
             save_company_context,
+            check_weekly_kickoff,
+            dismiss_weekly_kickoff,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

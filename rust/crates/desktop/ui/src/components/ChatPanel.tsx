@@ -69,7 +69,39 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [showKickoff, setShowKickoff] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Check whether the weekly kickoff banner should appear (new week).
+  useEffect(() => {
+    invoke<boolean>("check_weekly_kickoff").then((should) => {
+      if (should) setShowKickoff(true);
+    });
+  }, []);
+
+  const KICKOFF_PROMPT = `本周启动
+
+作为这家公司的 CEO，请完成本周规划：
+
+1. 基于公司知识库和当前阶段，判断本周最重要的 3 件事
+2. 为每件重点事项用 role 字段创建专属分析 agent（定义具体专家身份），获取具体行动建议
+3. 综合输出本周作战计划：
+   - 本周 3 大优先级（每个配具体的首要行动步骤）
+   - 需要关注的风险或机会
+   - 本周结束时的成功标准
+
+直接开始执行，不要询问确认。`;
+
+  async function handleStartKickoff() {
+    await invoke("dismiss_weekly_kickoff").catch(() => {});
+    setShowKickoff(false);
+    await sendMessage(KICKOFF_PROMPT);
+  }
+
+  async function handleSkipKickoff() {
+    await invoke("dismiss_weekly_kickoff").catch(() => {});
+    setShowKickoff(false);
+  }
 
   async function startLongTask(text: string) {
     try {
@@ -477,6 +509,37 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
               <p className="text-sm text-[#888] max-w-sm">
                 告诉我你想做什么，我来分解任务并调配专业团队完成它。
               </p>
+
+              {/* Weekly kickoff card — shown once per week on first launch */}
+              {showKickoff && (
+                <div className="mt-8 w-full max-w-md bg-[#1e1e1e] border border-[#ff8c00]/40 rounded-2xl p-5 text-left shadow-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">📅</span>
+                    <span className="text-sm font-semibold text-[#ff8c00]">新的一周</span>
+                  </div>
+                  <p className="text-sm text-[#ccc] mb-1 leading-relaxed">
+                    CEO 将基于公司知识库，创建本周专属分析团队，输出你的本周作战计划。
+                  </p>
+                  <p className="text-xs text-[#666] mb-4">
+                    包括 3 大优先级、行动步骤、风险与成功标准。
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleStartKickoff}
+                      disabled={thinking}
+                      className="flex-1 py-2 text-sm bg-[#ff8c00] text-white rounded-lg hover:bg-[#e07800] disabled:opacity-50 transition-colors font-medium"
+                    >
+                      🚀 启动本周规划
+                    </button>
+                    <button
+                      onClick={handleSkipKickoff}
+                      className="px-4 py-2 text-sm text-[#666] hover:text-[#aaa] transition-colors"
+                    >
+                      本周跳过
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <>
