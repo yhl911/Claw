@@ -25,6 +25,7 @@ mod company;
 mod context_window;
 mod daemon_client;
 mod dream;
+mod global_anchors;
 mod loop_detector;
 mod mcp;
 mod permission;
@@ -908,6 +909,50 @@ fn dismiss_weekly_kickoff() -> Result<(), String> {
     weekly_os::mark_kickoff_done()
 }
 
+/// Returns `true` when the weekly review banner should be shown
+/// (Friday or Saturday of a week where no review has been done yet).
+#[tauri::command]
+fn check_weekly_review() -> bool {
+    weekly_os::should_show_review()
+}
+
+/// Mark the weekly end-of-week review as handled (started or skipped).
+#[tauri::command]
+fn dismiss_weekly_review() -> Result<(), String> {
+    weekly_os::mark_review_done()
+}
+
+/// List all global anchors (cross-session persistent decisions).
+#[tauri::command]
+fn list_global_anchors() -> Vec<global_anchors::GlobalAnchorEntry> {
+    global_anchors::load()
+}
+
+/// Remove a global anchor by title.
+#[tauri::command]
+fn remove_global_anchor(title: String) -> Result<(), String> {
+    global_anchors::remove(&title).map_err(|e| e.to_string())
+}
+
+/// Promote a session-level anchor to a global anchor so it persists
+/// across all future sessions.
+#[tauri::command]
+fn promote_to_global(title: String) -> Result<(), String> {
+    let id = state::read_or_init_current_session_id();
+    let session_anchors = anchors::load(&id);
+    let entry = session_anchors
+        .iter()
+        .find(|a| a.title == title)
+        .ok_or_else(|| format!("anchor not found: {title}"))?;
+    let global_entry = global_anchors::GlobalAnchorEntry {
+        title: entry.title.clone(),
+        rationale: entry.rationale.clone(),
+        created_at_secs: entry.pinned_at_secs,
+        source_session: Some(id),
+    };
+    global_anchors::append(global_entry).map_err(|e| e.to_string())
+}
+
 /// Return the list of available slash commands (drawn from the runtime's
 /// command registry). For Phase 3 the desktop only displays them — actual
 /// slash command parsing happens in the chat input pipeline.
@@ -1584,6 +1629,11 @@ pub fn run() {
             save_company_context,
             check_weekly_kickoff,
             dismiss_weekly_kickoff,
+            check_weekly_review,
+            dismiss_weekly_review,
+            list_global_anchors,
+            remove_global_anchor,
+            promote_to_global,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

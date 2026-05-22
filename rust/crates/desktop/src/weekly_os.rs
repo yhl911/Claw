@@ -53,3 +53,43 @@ pub fn mark_kickoff_done() -> Result<(), String> {
     std::fs::write(&path, current_week_number().to_string())
         .map_err(|e| e.to_string())
 }
+
+fn review_state_path() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("opc-desktop")
+        .join("weekly_review")
+}
+
+/// Returns true when it's Friday or Saturday AND review hasn't been done this week.
+///
+/// Day-of-week calculation: 1970-01-01 was a Thursday.
+/// days % 7: 0=Thu, 1=Fri, 2=Sat, 3=Sun, 4=Mon, 5=Tue, 6=Wed
+pub fn should_show_review() -> bool {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let days = secs / 86_400;
+    let day_of_week = days % 7; // 1=Fri, 2=Sat
+    if day_of_week != 1 && day_of_week != 2 {
+        return false; // Only on Friday and Saturday
+    }
+    // Check if review was done this week
+    let current = current_week_number();
+    let path = review_state_path();
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        if let Ok(stored) = text.trim().parse::<u64>() {
+            return stored < current;
+        }
+    }
+    true
+}
+
+pub fn mark_review_done() -> Result<(), String> {
+    let path = review_state_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, current_week_number().to_string()).map_err(|e| e.to_string())
+}

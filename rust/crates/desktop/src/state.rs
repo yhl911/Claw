@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::anchors;
 use crate::api_client::DesktopApiClient;
+use crate::global_anchors;
 use crate::config::{normalize_model, DesktopConfig};
 use crate::event_sink::Sink;
 use crate::mcp::{self, DesktopMcp};
@@ -72,8 +73,11 @@ impl DesktopState {
                  Use this when the user (or you) settles on something that future turns \
                  must respect: technical choices, naming, constraints, preferences, \
                  forbidden patterns. The pinned title + rationale will be re-injected \
-                 into the system prompt of every subsequent turn — even after context \
-                 compaction. Keep title under 60 chars; rationale under 200 chars."
+                 into the system prompt of every subsequent turn -- even after context \
+                 compaction. Keep title under 60 chars; rationale under 200 chars. \
+                 Use is_global: true for decisions that should persist across ALL future sessions \
+                 (e.g., company name, tech stack choices, brand voice, target market). \
+                 Use is_global: false (default) for session-specific tactical decisions."
                     .to_string(),
             ),
             input_schema: serde_json::json!({
@@ -86,6 +90,10 @@ impl DesktopState {
                     "rationale": {
                         "type": "string",
                         "description": "One sentence on why this decision was made (the constraint or context)."
+                    },
+                    "is_global": {
+                        "type": "boolean",
+                        "description": "If true, this decision is saved globally and will be remembered in ALL future sessions. Use for decisions that should always be remembered: company name, tech stack, brand voice, pricing model, etc. Default false (session-only)."
                     }
                 },
                 "required": ["title", "rationale"]
@@ -176,6 +184,12 @@ impl DesktopState {
         let skills_section = crate::skills::enabled_skills_prompt_section();
         if !skills_section.is_empty() {
             system_prompt.push(skills_section);
+        }
+
+        // Inject global decision anchors (cross-session persistent memory).
+        let global_anchors_section = global_anchors::snapshot_for_prompt();
+        if !global_anchors_section.is_empty() {
+            system_prompt.push(global_anchors_section);
         }
 
         // Inject pinned decision anchors so long sessions don't drift

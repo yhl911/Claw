@@ -72,13 +72,18 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [showKickoff, setShowKickoff] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Check whether the weekly kickoff banner should appear (new week).
+  // Check whether the weekly kickoff or Friday review banner should appear.
   useEffect(() => {
-    invoke<boolean>("check_weekly_kickoff").then((should) => {
-      if (should) setShowKickoff(true);
-    });
+    Promise.all([
+      invoke<boolean>("check_weekly_kickoff"),
+      invoke<boolean>("check_weekly_review"),
+    ]).then(([kickoff, review]) => {
+      if (kickoff) setShowKickoff(true);
+      if (review && !kickoff) setShowReview(true); // Don't show both; kickoff takes priority
+    }).catch(() => {});
   }, []);
 
   const KICKOFF_PROMPT = `本周启动
@@ -103,6 +108,28 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
   async function handleSkipKickoff() {
     await invoke("dismiss_weekly_kickoff").catch(() => {});
     setShowKickoff(false);
+  }
+
+  const REVIEW_PROMPT = `本周回顾
+
+作为这家公司的 CEO，请完成本周收尾：
+
+1. 基于本周的对话和决策，总结本周实际完成了什么（对照本周计划）
+2. 提炼 2-3 条值得用 pin_decision（is_global: true）固定的重要决策或学到的教训
+3. 识别下周最重要的 1 件事
+4. 给出一句话的本周总结（用于记录）
+
+直接开始，无需询问。`;
+
+  async function handleStartReview() {
+    await invoke("dismiss_weekly_review").catch(() => {});
+    setShowReview(false);
+    await sendMessage(REVIEW_PROMPT);
+  }
+
+  async function handleSkipReview() {
+    await invoke("dismiss_weekly_review").catch(() => {});
+    setShowReview(false);
   }
 
   async function startLongTask(text: string) {
@@ -545,6 +572,37 @@ export function ChatPanel({ queuedInput, sessionEpoch, onLongTaskStarted }: Chat
                       className="px-4 py-2 text-sm text-[#666] hover:text-[#aaa] transition-colors"
                     >
                       本周跳过
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Friday / end-of-week review card */}
+              {showReview && !showKickoff && (
+                <div className="mt-8 w-full max-w-md bg-[#1e1e1e] border border-[#6366f1]/40 rounded-2xl p-5 text-left shadow-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">🌙</span>
+                    <span className="text-sm font-semibold text-[#6366f1]">本周收尾</span>
+                  </div>
+                  <p className="text-sm text-[#ccc] mb-1 leading-relaxed">
+                    CEO 将回顾本周完成情况，固定重要决策，并确认下周最优先的一件事。
+                  </p>
+                  <p className="text-xs text-[#666] mb-4">
+                    完成本周闭环，为下周启动做好准备。
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleStartReview}
+                      disabled={thinking}
+                      className="flex-1 py-2 text-sm bg-[#6366f1] text-white rounded-lg hover:bg-[#4f46e5] disabled:opacity-50 transition-colors font-medium"
+                    >
+                      🌙 开始本周回顾
+                    </button>
+                    <button
+                      onClick={handleSkipReview}
+                      className="px-4 py-2 text-sm text-[#666] hover:text-[#aaa] transition-colors"
+                    >
+                      跳过
                     </button>
                   </div>
                 </div>

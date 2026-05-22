@@ -80,9 +80,33 @@ impl DesktopToolExecutor {
                 "pin_decision: failed to persist anchor: {e}"
             ))));
         }
+        let is_global = parsed
+            .get("is_global")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if is_global {
+            let global_entry = crate::global_anchors::GlobalAnchorEntry {
+                title: title.clone(),
+                rationale: rationale.clone(),
+                created_at_secs: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+                source_session: Some(self.session_id.clone()),
+            };
+            if let Err(e) = crate::global_anchors::append(global_entry) {
+                // Non-fatal: log but don't fail the tool call
+                eprintln!("[pin_decision] failed to write global anchor: {e}");
+            }
+        }
+        let global_note = if is_global {
+            " Also saved as a GLOBAL anchor (will persist across all future sessions)."
+        } else {
+            ""
+        };
         Some(Ok(format!(
-            "📌 Pinned decision: \"{title}\". It will be reinjected into the system \
-             prompt for every subsequent turn this session. Rationale: {rationale}"
+            "Pinned decision: \"{title}\". It will be reinjected into the system \
+             prompt for every subsequent turn this session.{global_note} Rationale: {rationale}"
         )))
     }
 
